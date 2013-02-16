@@ -128,16 +128,16 @@ void *mem_realloc(void *addr, size_t size)
 }
 
 
-void init()
+void mem_init()
 {
-    header_type *headers = (header_type*) memory;
+    header_type *header = (header_type*) memory;
     // init first header as busy one with size = 0
-    headers[0].is_busy = true;
-    headers[0].curr_size = 0;
-    headers[0].prev_size = 0;
+    header->is_busy = true;
+    header->curr_size = 0;
+    header->prev_size = 0;
 
     // init second header as free one with max available size
-    header_type *free_header = get_next_header(headers);
+    header_type *free_header = get_next_header(header);
     free_header->is_busy = false;
     free_header->curr_size = SIZE - HEADER_SIZE * 3;
     free_header->prev_size = 0;
