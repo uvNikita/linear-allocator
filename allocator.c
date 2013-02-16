@@ -82,13 +82,16 @@ void init()
 
 void mem_dump()
 {
+    printf("_______________________________________________________\n");
     header_type *header = (header_type*) memory;
     do
     {
         printf("is_busy:\t%u\n", header->is_busy);
         printf("curr_size:\t%zu\n", header->curr_size);
-        printf("prev_size:\t%zu\n\n", header->prev_size);
+        printf("prev_size:\t%zu\n", header->prev_size);
+        printf("--------------------\n");
     } while((header = get_next_header(header)));
+    printf("_______________________________________________________\n");
 }
 
 
