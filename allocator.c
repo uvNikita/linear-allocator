@@ -10,6 +10,7 @@ header_type *get_prev_header(header_type *);
 void *get_userspace(header_type *);
 header_type *get_header(uint8_t *);
 void concat_with_next(header_type *header);
+void *mem_alloc_here(header_type *, size_t);
 
 
 void *mem_alloc(size_t size)
@@ -30,34 +31,7 @@ void *mem_alloc(size_t size)
         return NULL;
     }
 
-    // Make block busy in any case
-    header->is_busy = true;
-
-    // Calculating size for new free block
-    size_t new_block_size = header->curr_size - size;
-
-    // If there is no space left for next header, use whole block
-    if(new_block_size < HEADER_SIZE)
-    {
-        return get_userspace(header);
-    }
-
-    size_t new_free_size = new_block_size - HEADER_SIZE;
-
-    // Modify next header link
-    header_type *next_header = get_next_header(header);
-    next_header->prev_size = new_free_size;
-
-    // Modify size of founded header
-    header->curr_size = size;
-
-    // Get new next_header, create new links
-    next_header = get_next_header(header);
-    next_header->is_busy = false;
-    next_header->curr_size = new_free_size;
-    next_header->prev_size = size;
-
-    return get_userspace(header);
+    return mem_alloc_here(header, size);
 }
 
 
@@ -115,6 +89,40 @@ void mem_dump()
         printf("--------------------\n");
     } while((header = get_next_header(header)));
     printf("_______________________________________________________\n");
+}
+
+
+
+// Block have to have enough free space, next block must be busy
+void *mem_alloc_here(header_type *header, size_t size)
+{
+    // Make block busy in any case
+    header->is_busy = true;
+
+    // Calculating size for new free block
+    size_t new_block_size = header->curr_size - size;
+
+    // If there is no space left for next header, use whole block
+    if(new_block_size < HEADER_SIZE)
+    {
+        return get_userspace(header);
+    }
+
+    size_t new_free_size = new_block_size - HEADER_SIZE;
+
+    // Modify next header link
+    header_type *next_header = get_next_header(header);
+    next_header->prev_size = new_free_size;
+
+    // Modify size of founded header
+    header->curr_size = size;
+
+    // Get new next_header, create new links
+    next_header = get_next_header(header);
+    next_header->is_busy = false;
+    next_header->curr_size = new_free_size;
+    next_header->prev_size = size;
+    return get_userspace(header);
 }
 
 
