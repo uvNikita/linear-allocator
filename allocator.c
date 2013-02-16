@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "allocator.h"
 
 static uint8_t memory[SIZE];
@@ -10,7 +11,7 @@ header_type *get_prev_header(header_type *);
 void *get_userspace(header_type *);
 header_type *get_header(uint8_t *);
 void concat_with_next(header_type *header);
-void *mem_alloc_here(header_type *, size_t);
+void mem_alloc_here(header_type *, size_t);
 
 
 void *mem_alloc(size_t size)
@@ -31,7 +32,8 @@ void *mem_alloc(size_t size)
         return NULL;
     }
 
-    return mem_alloc_here(header, size);
+    mem_alloc_here(header, size);
+    return get_userspace(header);
 }
 
 
@@ -51,6 +53,77 @@ void mem_free(void *addr)
     if(!prev_header->is_busy)
     {
         concat_with_next(prev_header);
+    }
+}
+
+
+void *mem_realloc(void *addr, size_t size)
+{
+    header_type *header = get_header(addr);
+    header_type *next_header = get_next_header(header);
+    header_type *prev_header = get_prev_header(header);
+    if(size < header->curr_size)
+    {
+        if(next_header->is_busy)
+        {
+            mem_alloc_here(header, size);
+        }
+        else
+        {
+            size_t new_free_size = header->curr_size - size + next_header->curr_size;
+            next_header->prev_size = new_free_size;
+            header->curr_size = size;
+            next_header = get_next_header(header);
+            next_header->is_busy = false;
+            next_header->curr_size = new_free_size;
+            next_header->prev_size = size;
+        }
+        return addr;
+    }
+
+    // Going to make bigger
+    size_t delta = size - header->curr_size;
+
+    // Try to resize using next free space
+    if(!next_header->is_busy && (next_header->curr_size + HEADER_SIZE >= delta))
+    {
+        header->curr_size += HEADER_SIZE + next_header->curr_size;
+        mem_alloc_here(header, size);
+        return get_userspace(header);
+    }
+
+    // Try to resize using prev free space
+    if(!prev_header->is_busy && (prev_header->curr_size + HEADER_SIZE >= delta))
+    {
+
+    }
+
+    // Try to resize using both next and prev free spaces
+    if((!prev_header->is_busy
+        && (prev_header->curr_size + HEADER_SIZE) >= delta) ||
+       (!prev_header->is_busy &&
+        !next_header->is_busy &&
+        ((prev_header->curr_size + next_header->curr_size + 2 * HEADER_SIZE) >= delta)))
+    {
+        prev_header->curr_size += header->curr_size + HEADER_SIZE;
+        if(!next_header->is_busy)
+        {
+            prev_header->curr_size += next_header->curr_size + HEADER_SIZE;
+        }
+        memmove(get_userspace(prev_header), addr, size);
+        mem_alloc_here(prev_header, size);
+        return get_userspace(prev_header);
+    }
+
+    // There is no enough space near the block, try to allocate in other place
+    void *new_addr = mem_alloc(size);
+    if(new_addr){
+        return new_addr;
+    }
+    else
+    {
+        // There is no suitable block at all
+        return NULL;
     }
 }
 
@@ -94,7 +167,7 @@ void mem_dump()
 
 
 // Block have to have enough free space, next block must be busy
-void *mem_alloc_here(header_type *header, size_t size)
+void mem_alloc_here(header_type *header, size_t size)
 {
     // Make block busy in any case
     header->is_busy = true;
@@ -105,7 +178,7 @@ void *mem_alloc_here(header_type *header, size_t size)
     // If there is no space left for next header, use whole block
     if(new_block_size < HEADER_SIZE)
     {
-        return get_userspace(header);
+        return;
     }
 
     size_t new_free_size = new_block_size - HEADER_SIZE;
@@ -114,7 +187,6 @@ void *mem_alloc_here(header_type *header, size_t size)
     header_type *next_header = get_next_header(header);
     next_header->prev_size = new_free_size;
 
-    // Modify size of founded header
     header->curr_size = size;
 
     // Get new next_header, create new links
@@ -122,7 +194,6 @@ void *mem_alloc_here(header_type *header, size_t size)
     next_header->is_busy = false;
     next_header->curr_size = new_free_size;
     next_header->prev_size = size;
-    return get_userspace(header);
 }
 
 
