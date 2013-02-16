@@ -6,7 +6,10 @@ static uint8_t memory[SIZE];
 
 // System utils
 header_type *get_next_header(header_type *);
+header_type *get_prev_header(header_type *);
 void *get_userspace(header_type *);
+header_type *get_header(uint8_t *);
+void concat_with_next(header_type *header);
 
 
 void *mem_alloc(size_t size)
@@ -58,6 +61,26 @@ void *mem_alloc(size_t size)
 }
 
 
+void mem_free(void *addr)
+{
+    header_type *header = get_header(addr);
+    header->is_busy = false;
+
+    // If next block is free, concatenate current header with it
+    if(!get_next_header(header)->is_busy)
+    {
+        concat_with_next(header);
+    }
+
+    header_type *prev_header = get_prev_header(header);
+    // If prev block is free, concatenate current header with it
+    if(!prev_header->is_busy)
+    {
+        concat_with_next(prev_header);
+    }
+}
+
+
 void init()
 {
     header_type *headers = (header_type*) memory;
@@ -95,21 +118,53 @@ void mem_dump()
 }
 
 
-header_type *get_next_header(header_type *curr_header)
+header_type *get_next_header(header_type *header)
 {
-    uint8_t *curr_offset = (uint8_t*) curr_header;
-    header_type *get_next_header = (header_type*) (curr_offset + HEADER_SIZE + curr_header->curr_size);
+    uint8_t *offset = (uint8_t*) header;
+    header_type *next_header = (header_type*) (offset + HEADER_SIZE + header->curr_size);
 
     // check the last one
-    if((uint8_t*) get_next_header >= memory + SIZE)
+    if((uint8_t*) next_header >= memory + SIZE)
     {
         return NULL;
     }
-    return get_next_header;
+    return next_header;
+}
+
+
+header_type *get_prev_header(header_type *header)
+{
+    uint8_t *offset = (uint8_t*) header;
+    header_type *prev_header = (header_type*) (offset - header->prev_size - HEADER_SIZE);
+
+    // check the first one
+    if((uint8_t*) prev_header < memory)
+    {
+        return NULL;
+    }
+    return prev_header;
+}
+
+
+// Concatenate given header with next one, use is_busy flag from given header
+void concat_with_next(header_type *header)
+{
+    header_type *next_header = get_next_header(header);
+    header->curr_size += next_header->curr_size + HEADER_SIZE;
+
+    // Modify next header link
+    next_header = get_next_header(header);
+    next_header->prev_size = header->curr_size;
 }
 
     
 void *get_userspace(header_type *header)
 {
     return ((uint8_t*) header) + HEADER_SIZE;
+}
+
+
+header_type *get_header(uint8_t *addr)
+{
+    return (header_type*) (addr - HEADER_SIZE);
 }
