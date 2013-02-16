@@ -15,7 +15,7 @@ void *mem_alloc(size_t size)
     header_type *header = (header_type*) memory;
     do
     {
-        if(!header->is_busy && (header->curr_size >= (size + HEADER_SIZE)))
+        if(!header->is_busy && (header->curr_size >= size))
         {
             break;
         }
@@ -31,7 +31,7 @@ void *mem_alloc(size_t size)
     header->is_busy = true;
 
     // Calculating size for new free block
-    size_t new_block_size = header->curr_size - size - HEADER_SIZE;
+    size_t new_block_size = header->curr_size - size;
 
     // If there is no space left for next header, use whole block
     if(new_block_size < HEADER_SIZE)
