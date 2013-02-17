@@ -118,6 +118,7 @@ void *mem_realloc(void *addr, size_t size)
     // There is no enough space near the block, try to allocate in other place
     void *new_addr = mem_alloc(size);
     if(new_addr){
+        memmove(new_addr, addr, size);
         return new_addr;
     }
     else
