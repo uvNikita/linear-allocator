@@ -1,9 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "allocator.h"
 
+#define HEADER_SIZE sizeof(header_type)
+
 static uint8_t memory[SIZE];
+
+typedef struct {
+    uint8_t is_busy;
+    size_t curr_size;
+    size_t prev_size;
+} header_type;
 
 // System utils
 header_type *get_next_header(header_type *);
