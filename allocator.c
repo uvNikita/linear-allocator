@@ -12,15 +12,21 @@ void *get_userspace(header_type *);
 header_type *get_header(uint8_t *);
 void concat_with_next(header_type *header);
 void mem_alloc_here(header_type *, size_t);
+size_t round_to_4(size_t size);
 
 
 void *mem_alloc(size_t size)
 {
+    size_t real_size = round_to_4(size);
+    if(!real_size)
+    {
+        return NULL;
+    }
     // Search suitable memory block
     header_type *header = (header_type*) memory;
     do
     {
-        if(!header->is_busy && (header->curr_size >= size))
+        if(!header->is_busy && (header->curr_size >= real_size))
         {
             break;
         }
@@ -32,7 +38,7 @@ void *mem_alloc(size_t size)
         return NULL;
     }
 
-    mem_alloc_here(header, size);
+    mem_alloc_here(header, real_size);
     return get_userspace(header);
 }
 
@@ -59,36 +65,41 @@ void mem_free(void *addr)
 
 void *mem_realloc(void *addr, size_t size)
 {
+    size_t real_size = round_to_4(size);
+    if(!real_size)
+    {
+        return NULL;
+    }
     header_type *header = get_header(addr);
     header_type *next_header = get_next_header(header);
     header_type *prev_header = get_prev_header(header);
-    if(size < header->curr_size)
+    if(real_size < header->curr_size)
     {
         if(next_header->is_busy)
         {
-            mem_alloc_here(header, size);
+            mem_alloc_here(header, real_size);
         }
         else
         {
-            size_t new_free_size = header->curr_size - size + next_header->curr_size;
+            size_t new_free_size = header->curr_size - real_size + next_header->curr_size;
             next_header->prev_size = new_free_size;
-            header->curr_size = size;
+            header->curr_size = real_size;
             next_header = get_next_header(header);
             next_header->is_busy = false;
             next_header->curr_size = new_free_size;
-            next_header->prev_size = size;
+            next_header->prev_size = real_size;
         }
         return addr;
     }
 
     // Going to make bigger
-    size_t delta = size - header->curr_size;
+    size_t delta = real_size - header->curr_size;
 
     // Try to resize using next free space
     if(!next_header->is_busy && (next_header->curr_size + HEADER_SIZE >= delta))
     {
         header->curr_size += HEADER_SIZE + next_header->curr_size;
-        mem_alloc_here(header, size);
+        mem_alloc_here(header, real_size);
         return get_userspace(header);
     }
 
@@ -110,15 +121,15 @@ void *mem_realloc(void *addr, size_t size)
         {
             prev_header->curr_size += next_header->curr_size + HEADER_SIZE;
         }
-        memmove(get_userspace(prev_header), addr, size);
-        mem_alloc_here(prev_header, size);
+        memmove(get_userspace(prev_header), addr, real_size);
+        mem_alloc_here(prev_header, real_size);
         return get_userspace(prev_header);
     }
 
     // There is no enough space near the block, try to allocate in other place
-    void *new_addr = mem_alloc(size);
+    void *new_addr = mem_alloc(real_size);
     if(new_addr){
-        memmove(new_addr, addr, size);
+        memmove(new_addr, addr, real_size);
         return new_addr;
     }
     else
@@ -247,4 +258,10 @@ void *get_userspace(header_type *header)
 header_type *get_header(uint8_t *addr)
 {
     return (header_type*) (addr - HEADER_SIZE);
+}
+
+
+size_t round_to_4(size_t size)
+{
+    return (size + 3) & ~3;
 }
