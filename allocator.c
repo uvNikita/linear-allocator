@@ -83,8 +83,16 @@ void *mem_realloc(void *addr, size_t size)
         return NULL;
     }
     header_type *header = get_header(addr);
+
+    // Nothing to do, exiting
+    if(header->curr_size == real_size)
+    {
+        return addr;
+    }
+
     header_type *next_header = get_next_header(header);
     header_type *prev_header = get_prev_header(header);
+
     if(real_size < header->curr_size)
     {
         if(next_header->is_busy)
@@ -94,12 +102,15 @@ void *mem_realloc(void *addr, size_t size)
         else
         {
             size_t new_free_size = header->curr_size - real_size + next_header->curr_size;
-            next_header->prev_size = new_free_size;
             header->curr_size = real_size;
             next_header = get_next_header(header);
             next_header->is_busy = false;
             next_header->curr_size = new_free_size;
             next_header->prev_size = real_size;
+
+            // Update link
+            next_header = get_next_header(next_header);
+            next_header->prev_size = new_free_size;
         }
         return addr;
     }
@@ -111,14 +122,10 @@ void *mem_realloc(void *addr, size_t size)
     if(!next_header->is_busy && (next_header->curr_size + HEADER_SIZE >= delta))
     {
         header->curr_size += HEADER_SIZE + next_header->curr_size;
+        next_header = get_next_header(header);
+        next_header->prev_size = header->curr_size;
         mem_alloc_here(header, real_size);
         return get_userspace(header);
-    }
-
-    // Try to resize using prev free space
-    if(!prev_header->is_busy && (prev_header->curr_size + HEADER_SIZE >= delta))
-    {
-
     }
 
     // Try to resize using both next and prev free spaces
@@ -133,6 +140,10 @@ void *mem_realloc(void *addr, size_t size)
         {
             prev_header->curr_size += next_header->curr_size + HEADER_SIZE;
         }
+        // Modify next header link
+        next_header = get_next_header(prev_header);
+        next_header->prev_size = prev_header->curr_size;
+
         memmove(get_userspace(prev_header), addr, real_size);
         mem_alloc_here(prev_header, real_size);
         return get_userspace(prev_header);
@@ -142,6 +153,7 @@ void *mem_realloc(void *addr, size_t size)
     void *new_addr = mem_alloc(real_size);
     if(new_addr){
         memmove(new_addr, addr, real_size);
+        mem_free(addr);
         return new_addr;
     }
     else
@@ -180,6 +192,7 @@ void mem_dump()
     header_type *header = (header_type*) memory;
     do
     {
+        printf("addr:\t%p\n", get_userspace(header));
         printf("is_busy:\t%u\n", header->is_busy);
         printf("curr_size:\t%zu\n", header->curr_size);
         printf("prev_size:\t%zu\n", header->prev_size);
