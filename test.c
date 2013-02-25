@@ -4,74 +4,124 @@
 #include "allocator.h"
 
 
+typedef struct {
+    void *addr;
+    size_t size;
+    uint16_t cs;
+} var_type;
+
+
 void mem_fill(uint8_t *addr, size_t size)
 {
     for (int i = 0; i < size; ++i)
     {
-        *(addr + i) = 0xFF;
+        *(addr + i) = rand() % 0xFF;
     }
 
 }
 
 
-void crash_test(int count)
+uint16_t calc_checksum(uint8_t *addr, size_t size)
 {
-    mem_init();
-    int size = 20;
-    void *addrs[size];
+    uint16_t cs = 0;
     for (int i = 0; i < size; ++i)
     {
-        addrs[i] = NULL;
+        cs += *(addr + i);
+    }
+    return cs;
+
+}
+
+
+int crash_test(int count)
+{
+    mem_init();
+    int size = 30;
+    var_type vars[size];
+    for (int i = 0; i < size; ++i)
+    {
+        vars[i].addr = NULL;
+        vars[i].size = 0;
+        vars[i].cs = 0;
     }
     int id;
     for (int i = 0; i < count; ++i)
     {
         id = rand() % size;
-        size_t new_size = rand() % (256);
-        if(!addrs[id])
+        size_t new_size = rand() % (128);
+        if(!vars[id].addr)
         {
-            printf("Alloc iter = %d; index = %d; new_size = %zd \n", i, id, new_size);
-            addrs[id] = mem_alloc(new_size);
-            if(addrs[id])
+            void *new_addr = mem_alloc(new_size);
+            if(new_addr)
             {
-              mem_fill(addrs[id], new_size);
-              printf("Success\n\n");
+              printf("%d: alloc id = %d; new_addr = %p; new_size = %zd \n", i, id, new_addr, new_size);
+              vars[id].addr = new_addr;
+              vars[id].size = new_size;
+              mem_fill(vars[id].addr, vars[id].size);
+              vars[id].cs = calc_checksum(vars[id].addr, vars[id].size);
             }
             else
             {
-                printf("Failed\n\n");
+                printf("%d alloc: failed; new_size = %zd\n", i, new_size);
             }
-            continue;
         }
         else if(rand() % 2)
         {
-            printf("Free iter = %d; index = %d; addr = %p\n\n", i, id, addrs[id]);
-            mem_free(addrs[id]);
-            addrs[id] = NULL;
+            printf("%d: free id = %d; addr = %p\n", i, id, vars[id].addr);
+            mem_free(vars[id].addr);
+            vars[id].cs = 0;
+            vars[id].size = 0;
+            vars[id].addr = NULL;
         }
         else
         {
-            printf("Realloc iter = %d; index = %d; prev_addr = %p; new_size = %zd\n", i, id, addrs[id], new_size);
-            void* new_addr = mem_realloc(addrs[id], new_size);
+            void* new_addr = mem_realloc(vars[id].addr, new_size);
             if(new_addr)
             {
-                addrs[id] = new_addr;
-                mem_fill(new_addr, new_size);
-                printf("Success\n\n");
+                printf("%d: realloc id = %d; prev_addr = %p; prev_size = %zd; new_addr = %p; new_size = %zd\n",
+                       i, id, vars[id].addr, vars[id].size, new_addr, new_size);
+                vars[id].addr = new_addr;
+                vars[id].size = new_size;
+                vars[id].cs = calc_checksum(vars[id].addr, vars[id].size);
             }
             else 
             {
-                printf("Failed\n\n");
+                printf("%d realloc: failed; new_size = %zd\n", i, new_size);
             }
         }
 
+        // Verify checksums and memory
+        for (int j = 0; j < size; ++j)
+        {
+            if(!vars[j].addr)
+            {
+                continue;
+            }
+            uint16_t cs = calc_checksum(vars[j].addr, vars[j].size);
+            if(cs != vars[j].cs)
+            {
+                printf("Checksum failed(id=%d): %d != %d\n", j, cs, vars[j].cs);
+                return 1;
+            }
+        }
+        printf("Checksum OK\n\n");
+
+        int status = mem_verify();
+        if(status)
+        {
+            printf("Error, mem not valid. Exiting\n");
+            return status;
+        }
+
+
     }
+    return 0;
 }
 
 
 int main()
 {
-    crash_test(1000);
+    int status = crash_test(1000);
     mem_dump();
-    return 0;
+    return status;
 }
