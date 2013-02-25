@@ -234,6 +234,22 @@ void mem_alloc_here(header_type *header, size_t size)
 }
 
 
+int mem_verify()
+{
+    header_type *prev_header = (header_type*) memory;
+    header_type *header = get_next_header(prev_header);
+    do
+    {
+        if(header->prev_size != prev_header->curr_size)
+        {
+            return 1;
+        }
+        prev_header = header;
+    } while((header = get_next_header(header)));
+    return 0;
+}
+
+
 header_type *get_next_header(header_type *header)
 {
     uint8_t *offset = (uint8_t*) header;
